@@ -15,7 +15,7 @@ export class CartService {
   async findByUserId(userId: string): Promise<Cart> {
     const result = await this.pool.query({
       text: `SELECT carts.id, carts.user_id, carts.created_at, carts.updated_at, carts.status,
-        array_agg(
+        COALESCE(array_agg(
           json_build_object(
             'cart_id', cart_items.cart_id,
             'product_id', cart_items.product_id,
@@ -27,11 +27,11 @@ export class CartService {
               'id', products.id
             )
           )
-        ) AS items
+        ) FILTER (WHERE cart_items.product_id IS NOT NULL), '{}') AS items
         FROM ${this.cartsTableName} AS carts
-        INNER JOIN ${this.cartItemsTableName} AS cart_items
+        LEFT JOIN ${this.cartItemsTableName} AS cart_items
         ON carts.id=cart_items.cart_id
-        INNER JOIN ${this.productsTableName} AS products
+        LEFT JOIN ${this.productsTableName} AS products
         ON cart_items.product_id=products.id
         WHERE carts.user_id=$1
         GROUP BY carts.id`,

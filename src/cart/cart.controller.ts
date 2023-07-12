@@ -8,14 +8,16 @@ import {
   Post,
   UseGuards,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
 
-import { BasicAuthGuard, JwtAuthGuard } from '../auth';
+import { BasicAuthGuard } from '../auth';
 import { OrderService } from '../order';
 import { AppRequest, getUserIdFromRequest } from '../shared';
 
 import { calculateCartTotal } from './models-rules';
 import { CartService } from './services';
+import { Response } from 'express';
 
 @Controller('api/profile/cart')
 export class CartController {
@@ -74,18 +76,17 @@ export class CartController {
   // @UseGuards(JwtAuthGuard)
   @UseGuards(BasicAuthGuard)
   @Post('checkout')
-  async checkout(@Req() req: AppRequest, @Body() body) {
+  async checkout(@Req() req: AppRequest, @Res() res: Response, @Body() body) {
     const userId = getUserIdFromRequest(req);
     const cart = await this.cartService.findByUserId(userId);
 
     if (!(cart && cart.items.length)) {
       const statusCode = HttpStatus.BAD_REQUEST;
-      req.statusCode = statusCode;
 
-      return {
+      return res.status(statusCode).json({
         statusCode,
         message: 'Cart is empty',
-      };
+      });
     }
 
     const { id: cartId, items } = cart;
@@ -97,12 +98,11 @@ export class CartController {
       items,
       total,
     });
-    await this.cartService.removeByUserId(userId);
 
-    return {
+    return res.json({
       statusCode: HttpStatus.OK,
       message: 'OK',
       data: { order },
-    };
+    });
   }
 }

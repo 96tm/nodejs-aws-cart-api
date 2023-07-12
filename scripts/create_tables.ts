@@ -48,7 +48,7 @@ async function createCartsTable() {
       .timestamp('updated_at', { useTz: true })
       .notNullable()
       .defaultTo(client.raw('now()'));
-    table.enum('status', ['OPEN', 'ORDERED']).notNullable();
+    table.enum('status', ['OPEN', 'ORDERED', 'IN_PROGRESS']).notNullable();
   });
   console.log(result);
 }
