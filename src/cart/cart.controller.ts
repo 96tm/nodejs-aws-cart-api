@@ -100,7 +100,7 @@ export class CartController {
     });
 
     return res.json({
-      statusCode: HttpStatus.OK,
+      statusCode: HttpStatus.CREATED,
       message: 'OK',
       data: { order },
     });
