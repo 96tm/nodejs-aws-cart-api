@@ -1,31 +1,70 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { Pool } from 'pg';
 
-import { v4 } from 'uuid';
-
-import { Cart } from '../models';
+import { Cart, CartStatus, CartUpdateDTO } from '../models';
+import { PG_CONNECTION } from '../../constants';
 
 @Injectable()
 export class CartService {
-  private userCarts: Record<string, Cart> = {};
+  private cartsTableName = process.env.CARTS_TABLE_NAME;
+  private cartItemsTableName = process.env.CART_ITEMS_TABLE_NAME;
+  private productsTableName = process.env.PRODUCTS_TABLE_NAME;
 
-  findByUserId(userId: string): Cart {
-    return this.userCarts[ userId ];
+  constructor(@Inject(PG_CONNECTION) private pool: Pool) {}
+
+  async findByUserId(userId: string): Promise<Cart> {
+    const result = await this.pool.query({
+      text: `SELECT carts.id, carts.user_id, carts.created_at, carts.updated_at, carts.status,
+        COALESCE(array_agg(
+          json_build_object(
+            'cart_id', cart_items.cart_id,
+            'product_id', cart_items.product_id,
+            'count', cart_items.count,
+            'product', json_build_object(
+              'price', products.price,
+              'title', products.title,
+              'description', products.description,
+              'id', products.id
+            )
+          )
+        ) FILTER (WHERE cart_items.product_id IS NOT NULL), '{}') AS items
+        FROM ${this.cartsTableName} AS carts
+        LEFT JOIN ${this.cartItemsTableName} AS cart_items
+        ON carts.id=cart_items.cart_id
+        LEFT JOIN ${this.productsTableName} AS products
+        ON cart_items.product_id=products.id
+        WHERE carts.user_id=$1
+        GROUP BY carts.id`,
+      values: [userId],
+    });
+    console.log(result.rows);
+    return result.rows[0] as Cart;
   }
 
-  createByUserId(userId: string) {
-    const id = v4();
-    const userCart = {
-      id,
+  async createByUserId(userId: string): Promise<Cart> {
+    const result = await this.pool.query({
+      text: `
+        INSERT INTO ${this.cartsTableName}
+        (user_id, status)
+        VALUES ($1, $2)
+        RETURNING id, user_id, created_at, updated_at`,
+      values: [userId, CartStatus.Open],
+    });
+    console.log(result);
+    const cart = result.rows[0];
+    const returned: Cart = {
       items: [],
+      createdAt: cart.created_at,
+      updatedAt: cart.updated_at,
+      id: cart.id,
+      status: cart.status,
+      userId,
     };
-
-    this.userCarts[ userId ] = userCart;
-
-    return userCart;
+    return returned;
   }
 
-  findOrCreateByUserId(userId: string): Cart {
-    const userCart = this.findByUserId(userId);
+  async findOrCreateByUserId(userId: string): Promise<Cart> {
+    const userCart = await this.findByUserId(userId);
 
     if (userCart) {
       return userCart;
@@ -34,22 +73,31 @@ export class CartService {
     return this.createByUserId(userId);
   }
 
-  updateByUserId(userId: string, { items }: Cart): Cart {
-    const { id, ...rest } = this.findOrCreateByUserId(userId);
-
-    const updatedCart = {
-      id,
-      ...rest,
-      items: [ ...items ],
+  async updateByUserId(
+    userId: string,
+    { items }: CartUpdateDTO,
+  ): Promise<Cart> {
+    const { id: cartId } = await this.findOrCreateByUserId(userId);
+    await this.pool.query('BEGIN');
+    await this.pool.query(
+      `DELETE FROM ${this.cartItemsTableName} as cart_items WHERE cart_items.cart_id=$1`,
+      [cartId],
+    );
+    for (const item of items) {
+      await this.pool.query(
+        `INSERT INTO ${this.cartItemsTableName} (cart_id, product_id, count) VALUES($1, $2, $3)`,
+        [cartId, item.productId, item.count],
+      );
     }
-
-    this.userCarts[ userId ] = { ...updatedCart };
-
-    return { ...updatedCart };
+    await this.pool.query('COMMIT');
+    const updatedCart = await this.findByUserId(userId);
+    return updatedCart;
   }
 
-  removeByUserId(userId): void {
-    this.userCarts[ userId ] = null;
+  async removeByUserId(userId: string): Promise<void> {
+    await this.pool.query(
+      `DELETE FROM ${this.cartsTableName} WHERE user_id=$1`,
+      [userId],
+    );
   }
-
 }
