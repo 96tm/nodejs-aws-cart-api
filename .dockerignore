@@ -1,3 +1,6 @@
+# we never need existing dist and node_modules
+# other files listed here are of no use to
+# the image either
 dist
 cdk.out
 README.md
