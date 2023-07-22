@@ -21,7 +21,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "cdk:deploy": "npx cdk deploy",
     "create_tables": "ts-node ./scripts/create_tables.ts",
-    "seed_tables": "ts-node ./scripts/seed_tables.ts"
+    "seed_tables": "ts-node ./scripts/seed_tables.ts",
+    "lint_dockerfile": "npx dockerfile_lint"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.3",
@@ -59,6 +60,7 @@
     "@typescript-eslint/eslint-plugin": "5.60.0",
     "@typescript-eslint/parser": "5.60.0",
     "aws-cdk": "2.87.0",
+    "dockerfile_lint": "^0.3.4",
     "eslint": "8.43.0",
     "eslint-config-prettier": "^8.8.0",
     "eslint-plugin-import": "^2.27.5",
